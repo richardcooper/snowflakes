@@ -6,7 +6,7 @@ var camera, scene, renderer;
 
 var snowflakeSimulation;
 var snowflakeData;
-var snowflakeUniforms;
+var snowflakeObject;
 
 var stats;
 
@@ -39,8 +39,8 @@ snowflakeRenderVertexShader = `
 
 
 snowflakeRenderFragmentShader = `
-    #define rho (0.635)
-    #define beta (1.6)
+    uniform float maxC;
+    uniform float maxD;
 
     #define darkCrystal  (vec4(0.06, 0.01, 0.45, 1.0))
     #define lightCrystal (vec4(0.90, 0.90, 1.00, 1.0))
@@ -56,11 +56,11 @@ snowflakeRenderFragmentShader = `
 
         if (bool(cell.a)) {
             // Inside snowflake
-            percent = cell.g / beta;
+            percent = cell.g / maxC;
             gl_FragColor = mix(lightCrystal, darkCrystal, percent);
         } else {
             // Outside snowflake
-            percent = cell.r / rho;
+            percent = cell.r / maxD;
             gl_FragColor = mix(lightVapour, darkVapour, percent);
         }
 	}
@@ -73,12 +73,12 @@ snowflakeRenderFragmentShader = `
 // fix this we would need to run each sub-step separately and have require
 // multiple calls to `snowflakeSimulation.compute()` to complete one full step.
 snowflakeComputationFragmentShader = `
-    #define beta (1.6)
-    #define alpha (0.4)
-    #define theta (0.025)
-    #define kappa (0.005)
-    #define mu (0.015)
-    #define gamma (0.0005)
+    uniform float beta;
+    uniform float alpha;
+    uniform float theta;
+    uniform float kappa;
+    uniform float mu;
+    uniform float gamma;
 
     void main()	{
 		vec2 cellSize = 1.0 / resolution.xy;
@@ -150,10 +150,21 @@ snowflakeComputationFragmentShader = `
 
 
 function init() {
+    var params = {
+        rho: 0.635,
+        beta: 1.6,
+        alpha: 0.4,
+        theta: 0.025,
+        kappa: 0.005,
+        mu: 0.015,
+        gamma: 0.0005,
+    };
+
     initRenderer();
     initScene();
-    initSimulation();
+    initSimulation(params);
     initStats();
+    setUniforms(params);
 }
 
 
@@ -179,7 +190,7 @@ function initScene() {
         vertexShader: snowflakeRenderVertexShader,
         fragmentShader: snowflakeRenderFragmentShader,
     });
-    var snowflakeObject = new THREE.Mesh(geometry, material);
+    snowflakeObject = new THREE.Mesh(geometry, material);
 
     scene = new THREE.Scene();
     scene.add(snowflakeObject);
@@ -193,14 +204,12 @@ function initScene() {
         1000
     );
     camera.position.z = 2;
-
-    snowflakeUniforms = material.uniforms;
 }
 
 
-function initSimulation() {
+function initSimulation(params) {
     snowflakeSimulation = new GPUComputationRenderer(COMPUTATION_WIDTH, COMPUTATION_HEIGHT, renderer);
-    snowflakeInitialData = getInitialData(snowflakeSimulation);
+    snowflakeInitialData = getInitialData(snowflakeSimulation, params);
 
     snowflakeData = snowflakeSimulation.addVariable(
         "snowflake",
@@ -216,6 +225,17 @@ function initSimulation() {
     }
 }
 
+function setUniforms(params) {
+    snowflakeData.material.uniforms.beta = {value: params.beta};
+    snowflakeData.material.uniforms.alpha = {value: params.alpha};
+    snowflakeData.material.uniforms.theta = {value: params.theta};
+    snowflakeData.material.uniforms.kappa = {value: params.kappa};
+    snowflakeData.material.uniforms.mu = {value: params.mu};
+    snowflakeData.material.uniforms.gamma = {value: params.gamma};
+
+    snowflakeObject.material.uniforms.maxD = {value: params.rho*1};
+    snowflakeObject.material.uniforms.maxC = {value: params.beta*2};
+}
 
 function initStats() {
     stats = new Stats();
@@ -223,9 +243,7 @@ function initStats() {
 }
 
 
-function getInitialData(snowflakeSimulation) {
-    var rho = 0.635;
-
+function getInitialData(snowflakeSimulation, params) {
     var texture = snowflakeSimulation.createTexture();
     var pixels = texture.image.data;
     var width = texture.image.width;
@@ -237,7 +255,7 @@ function getInitialData(snowflakeSimulation) {
     // Initially all cells contain an amount of vapour equal to `rho` (d=rho).
     // There is no liquid (b=0), crystal (c=0) or attachment (a=0) ...
     for (var p=0; p < pixels.length; p+=4) {
-        pixels[p + 0] = rho; // d
+        pixels[p + 0] = params.rho; // d
         pixels[p + 1] = 0.0; // c
         pixels[p + 2] = 0.0; // b
         pixels[p + 3] = 0.0; // a
@@ -263,7 +281,7 @@ function animate() {
     // copy the data from that into the texture for snowflake object and then
     // render the scene containing the snowflake object
     snowflakeSimulation.compute();
-    snowflakeUniforms.snowflake.value = snowflakeSimulation.getCurrentRenderTarget(snowflakeData).texture;
+    snowflakeObject.material.uniforms.snowflake.value = snowflakeSimulation.getCurrentRenderTarget(snowflakeData).texture;
     renderer.render(scene, camera);
 
     stats.update();
