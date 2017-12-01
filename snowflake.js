@@ -13,28 +13,10 @@ var stats;
 preset_params = {
     "preset": "Fernlike",
     "remembered": {
-        "Fernlike": {
-            "0": {
-                "rho": 0.635,
-                "beta": 1.6,
-                "alpha": 0.4,
-                "theta": 0.025,
-                "kappa": 0.005,
-                "mu": 0.015,
-                "gamma": 0.0005,
-            },
-        },
-        "Stellar Dendrite": {
-            "0": {
-                "rho": 0.8,
-                "beta": 2.6,
-                "alpha": 0.004,
-                "theta": 0.001,
-                "kappa": 0.05,
-                "mu": 0.015,
-                "gamma": 0.0001,
-            },
-        },
+        "Fernlike":         {"0": {"rho": 0.635, "beta": 1.6,  "alpha": 0.4,   "theta": 0.025, "kappa": 0.005, "mu": 0.015, "gamma": 0.0005  }},
+        "Stellar Dendrite": {"0": {"rho": 0.8,   "beta": 2.6,  "alpha": 0.004, "theta": 0.001, "kappa": 0.05,  "mu": 0.015, "gamma": 0.0001  }},
+        "Fig 9a":           {"0": {"rho": 0.4,   "beta": 1.3,  "alpha": 0.08,  "theta": 0.025, "kappa": 0.003, "mu": 0.070, "gamma": 0.00005 }},
+        "Ribbed Plate":     {"0": {"rho": 0.37,  "beta": 1.09, "alpha": 0.02,  "theta": 0.09,  "kappa": 0.003, "mu": 0.12,  "gamma": 0.000001}},
     },
     "closed": false,
     "folders": {},
