@@ -78,12 +78,6 @@ snowflakeRenderFragmentShader = `
 	}
 `
 
-// This doesn't quite match the algorithm in the paper because the snowflake
-// data is only updated after the whole step rather than after each sub-step. So
-// for example when sub-step 3 looks for `nearbyVapour` it see the state of its
-// neighbours as they were before sub-step 1 rather than after sub-step 2. To
-// fix this we would need to run each sub-step separately and have require
-// multiple calls to `snowflakeSimulation.compute()` to complete one full step.
 snowflakeComputationFragmentShader = `
     uniform float beta;
     uniform float alpha;
@@ -91,6 +85,8 @@ snowflakeComputationFragmentShader = `
     uniform float kappa;
     uniform float mu;
     uniform float gamma;
+
+    uniform int step;
 
     void main()	{
 		vec2 cellSize = 1.0 / resolution.xy;
@@ -113,48 +109,56 @@ snowflakeComputationFragmentShader = `
         neighbourCount = max(neighbourCount, 0.0);
         float inBoundary = min(neighbourCount, 1.0);
 
-        // 1. Diffusion
-		d = ((topLeft.r + topRight.r + right.r + bottomRight.r + bottomLeft.r + left.r + d)/7.0)*(1.0-a) + neighbourCount*d/7.0;
+        if (step==1){
+            // 1. Diffusion
+		    d = ((topLeft.r + topRight.r + right.r + bottomRight.r + bottomLeft.r + left.r + d)/7.0)*(1.0-a) + neighbourCount*d/7.0;
+        }
 
-        // 2. Freezing
-        b += inBoundary * d * (1.0-kappa);
-        c += inBoundary * d * kappa;
-        d -= inBoundary * d;
+        if (step==2){
+            // 2. Freezing
+            b += inBoundary * d * (1.0-kappa);
+            c += inBoundary * d * kappa;
+            d -= inBoundary * d;
+        }
 
-        // 3. Attachment
+        if (step==3){
+            // 3. Attachment
 
-        // (3a)  - A boundary site with 1 or 2 attached neighbors needs boundary
-        // mass at least β to join the crystal:
-        a = max(a, float(((neighbourCount == 1.0) || (neighbourCount == 2.0)) && (b > beta)));
+            // (3a)  - A boundary site with 1 or 2 attached neighbors needs boundary
+            // mass at least β to join the crystal:
+            a = max(a, float(((neighbourCount == 1.0) || (neighbourCount == 2.0)) && (b > beta)));
 
-        // (3b) A boundary site with 3 attached neighbors joins the crystal if
-        // either:
-        //  - it has boundary mass ≥ 1, or
-        a = max(a, float((neighbourCount == 3.0) && (b >= 1.0)));
-        //  - it has diffusive mass < θ in its neighborhood and it has boundary mass ≥ α:
-        float nearbyVapour = topLeft.r + topRight.r + right.r + bottomRight.r + bottomLeft.r + left.r + d;
-        a = max(a, float((neighbourCount == 3.0) && (b >= alpha) && (nearbyVapour < theta)));
+            // (3b) A boundary site with 3 attached neighbors joins the crystal if
+            // either:
+            //  - it has boundary mass ≥ 1, or
+            a = max(a, float((neighbourCount == 3.0) && (b >= 1.0)));
+            //  - it has diffusive mass < θ in its neighborhood and it has boundary mass ≥ α:
+            float nearbyVapour = topLeft.r + topRight.r + right.r + bottomRight.r + bottomLeft.r + left.r + d;
+            a = max(a, float((neighbourCount == 3.0) && (b >= alpha) && (nearbyVapour < theta)));
 
-        // (3c) Finally, boundary sites with 4 or more attached neighbors join
-        // the crystal automatically
-        a = max(a, float(neighbourCount >= 4.0));
+            // (3c) Finally, boundary sites with 4 or more attached neighbors join
+            // the crystal automatically
+            a = max(a, float(neighbourCount >= 4.0));
 
-        // Once a site is attached, its boundary mass becomes crystal mass:
-        c += inBoundary * a * b;
-        b -= inBoundary * a * b;
+            // Once a site is attached, its boundary mass becomes crystal mass:
+            c += inBoundary * a * b;
+            b -= inBoundary * a * b;
+        }
 
-        // 4. Melting
-        // Proportion μ of the boundary mass and proportion γ of the crystal
-        // mass at each boundary site become diffusive mass.
+        if (step==4){
+            // 4. Melting
+            // Proportion μ of the boundary mass and proportion γ of the crystal
+            // mass at each boundary site become diffusive mass.
 
-        // TODO these redefinitions will be needed if this is split out into a seperate step.
-		//float neighbourCount = topLeft.a + topRight.a + right.a + bottomRight.a + bottomLeft.a + left.a - 6.0*a;
-        //neighbourCount = max(neighbourCount, 0.0);
-        //float inBoundary =  min(neighbourCount, 1.0);
+            // TODO these redefinitions will be needed if this is split out into a seperate step.
+            //float neighbourCount = topLeft.a + topRight.a + right.a + bottomRight.a + bottomLeft.a + left.a - 6.0*a;
+            //neighbourCount = max(neighbourCount, 0.0);
+            //float inBoundary =  min(neighbourCount, 1.0);
 
-        d += inBoundary * (b*mu + c*gamma);
-        b -= inBoundary * b*mu;
-        c -= inBoundary * c*gamma;
+            d += inBoundary * (b*mu + c*gamma);
+            b -= inBoundary * b*mu;
+            c -= inBoundary * c*gamma;
+        }
 
 		gl_FragColor = vec4(d, c, b, a);
 	}
@@ -239,6 +243,7 @@ function setUniforms(params) {
     snowflakeData.material.uniforms.kappa = {value: params.kappa};
     snowflakeData.material.uniforms.mu = {value: params.mu};
     snowflakeData.material.uniforms.gamma = {value: params.gamma};
+    snowflakeData.material.uniforms.step = {value: 1};
 
     snowflakeObject.material.uniforms.maxD = {value: params.rho*1};
     snowflakeObject.material.uniforms.maxC = {value: params.beta*2};
@@ -307,7 +312,10 @@ function animate() {
     // Every animation frame we do a single step of the snowflake simulation,
     // copy the data from that into the texture for snowflake object and then
     // render the scene containing the snowflake object
-    snowflakeSimulation.compute();
+    for (var step=1; step <= 4; step++) {
+        snowflakeData.material.uniforms.step.value = step;
+        snowflakeSimulation.compute();
+    }
     snowflakeObject.material.uniforms.snowflake.value = snowflakeSimulation.getCurrentRenderTarget(snowflakeData).texture;
     renderer.render(scene, camera);
 
