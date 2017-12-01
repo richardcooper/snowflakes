@@ -10,6 +10,36 @@ var snowflakeObject;
 
 var stats;
 
+preset_params = {
+    "preset": "Fernlike",
+    "remembered": {
+        "Fernlike": {
+            "0": {
+                "rho": 0.635,
+                "beta": 1.6,
+                "alpha": 0.4,
+                "theta": 0.025,
+                "kappa": 0.005,
+                "mu": 0.015,
+                "gamma": 0.0005,
+            },
+        },
+        "Stellar Dendrite": {
+            "0": {
+                "rho": 0.8,
+                "beta": 2.6,
+                "alpha": 0.004,
+                "theta": 0.001,
+                "kappa": 0.05,
+                "mu": 0.015,
+                "gamma": 0.0001,
+            },
+        },
+    },
+    "closed": false,
+    "folders": {},
+}
+
 
 snowflakeRenderVertexShader = `
 
@@ -150,18 +180,11 @@ snowflakeComputationFragmentShader = `
 
 
 function init() {
-    var params = {
-        rho: 0.635,
-        beta: 1.6,
-        alpha: 0.4,
-        theta: 0.025,
-        kappa: 0.005,
-        mu: 0.015,
-        gamma: 0.0005,
-    };
+    var params = Object.assign({}, preset_params["remembered"][preset_params["preset"]]["0"]);
 
     initRenderer();
     initScene();
+    initGUI(params);
     initSimulation(params);
     initStats();
     setUniforms(params);
@@ -174,6 +197,7 @@ function initRenderer() {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(canvas.width, canvas.height);
 }
+
 
 function initScene() {
     // The size of the snowflake geometry is a little redundant in the current
@@ -225,6 +249,7 @@ function initSimulation(params) {
     }
 }
 
+
 function setUniforms(params) {
     snowflakeData.material.uniforms.beta = {value: params.beta};
     snowflakeData.material.uniforms.alpha = {value: params.alpha};
@@ -236,6 +261,26 @@ function setUniforms(params) {
     snowflakeObject.material.uniforms.maxD = {value: params.rho*1};
     snowflakeObject.material.uniforms.maxC = {value: params.beta*2};
 }
+
+
+function initGUI(params) {
+    var uniformsChanger = function() {
+        initSimulation(params);
+        setUniforms(params);
+    };
+
+    var gui = new dat.GUI({load: preset_params});
+    gui.add(params, 'rho');
+    gui.add(params, 'beta').onFinishChange(uniformsChanger);
+    gui.add(params, 'alpha').onFinishChange(uniformsChanger);
+    gui.add(params, 'theta').onFinishChange(uniformsChanger);
+    gui.add(params, 'kappa').onFinishChange(uniformsChanger);
+    gui.add(params, 'mu').onFinishChange(uniformsChanger);
+    gui.add(params, 'gamma').onFinishChange(uniformsChanger);
+    gui.remember(params);
+
+}
+
 
 function initStats() {
     stats = new Stats();
