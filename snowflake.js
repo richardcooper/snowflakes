@@ -174,12 +174,11 @@ snowflakeComputationFragmentShader = `
 		//float a = cell.a; // attachment (actually a bool but more convient to leave as an float for multiplications)
 
         if (step==1){
-            gl_FragColor = diffusion(cell, n);
-        } else if (step==2){
+            cell = diffusion(cell, n);
             gl_FragColor = freezing(cell, n);
-        } else if (step==3){
+        } else if (step==2){
             gl_FragColor = attachment(cell, n);
-        } else if (step==4){
+        } else if (step==3){
             gl_FragColor = melting(cell, n);
         }
     }
@@ -332,7 +331,7 @@ function animate() {
 
     // Every animation frame we run a single generation of the snowflake
     // simulation. Each generation consists of multiple steps.
-    for (var step=1; step <= 4; step++) {
+    for (var step=1; step <= 3; step++) {
         snowflakeData.material.uniforms.step.value = step;
         snowflakeSimulation.compute();
     }
