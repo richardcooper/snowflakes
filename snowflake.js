@@ -88,80 +88,101 @@ snowflakeComputationFragmentShader = `
 
     uniform int step;
 
-    void main()	{
-		vec2 cellSize = 1.0 / resolution.xy;
-		vec2 uv = gl_FragCoord.xy * cellSize;
-		vec4 cell = texture2D(snowflake, uv);
-		float d = cell.r; // diffuse (vapor) mass
-		float c = cell.g; // crystal (ice) mass
-		float b = cell.b; // boundary (water) mass
-		float a = cell.a; // attachment (actually a bool but more convient to leave as an float for multiplications)
+    float inBoundary(vec4 cell, vec4 n[6]) {
+		float neighbourCount = n[0].a + n[1].a + n[2].a + n[3].a + n[4].a + n[5].a - 6.0*cell.a;
+        neighbourCount = max(neighbourCount, 0.0);
+        return min(neighbourCount, 1.0);
+        //TODO do this with a clamp
+    }
 
-		// Get neighbours
-		vec4 topLeft = texture2D(snowflake, uv + vec2(-cellSize.x, cellSize.y));
-		vec4 topRight = texture2D(snowflake, uv + vec2(0.0, cellSize.y));
-		vec4 right = texture2D(snowflake, uv + vec2(cellSize.x, 0.0));
-		vec4 bottomRight = texture2D(snowflake, uv + vec2(cellSize.x, -cellSize.y));
-		vec4 bottomLeft = texture2D(snowflake, uv + vec2(0.0, -cellSize.y));
-		vec4 left = texture2D(snowflake, uv + vec2(-cellSize.x, 0.0));
-
-		float neighbourCount = topLeft.a + topRight.a + right.a + bottomRight.a + bottomLeft.a + left.a - 6.0*a;
+    vec4 diffusion(vec4 cell, vec4 n[6]) {
+		float neighbourCount = n[0].a + n[1].a + n[2].a + n[3].a + n[4].a + n[5].a - 6.0*cell.a;
         neighbourCount = max(neighbourCount, 0.0);
         float inBoundary = min(neighbourCount, 1.0);
 
+        // 1. Diffusion
+        cell.r = ((n[0].r+n[1].r+n[2].r+n[3].r+n[4].r+n[5].r+cell.r)/7.0)*(1.0-cell.a) + neighbourCount*cell.r/7.0;
+
+		return cell;
+    }
+
+    vec4 freezing(vec4 cell, vec4 n[6]) {
+        // 2. Freezing
+        float inBoundary = inBoundary(cell, n);
+        cell.b += inBoundary * cell.r * (1.0-kappa);
+        cell.g += inBoundary * cell.r * kappa;
+        cell.r -= inBoundary * cell.r;
+
+		return cell;
+    }
+
+    vec4 attachment(vec4 cell, vec4 n[6]) {
+        // 3. Attachment
+		float neighbourCount = n[0].a + n[1].a + n[2].a + n[3].a + n[4].a + n[5].a - 6.0*cell.a;
+        neighbourCount = max(neighbourCount, 0.0);
+        float inBoundary = min(neighbourCount, 1.0);
+
+        // (3a)  - A boundary site with 1 or 2 attached neighbors needs boundary
+        // mass at least β to join the crystal:
+        cell.a = max(cell.a, float(((neighbourCount == 1.0) || (neighbourCount == 2.0)) && (cell.b > beta)));
+
+        // (3b) A boundary site with 3 attached neighbors joins the crystal if
+        // either:
+        //  - it has boundary mass ≥ 1, or
+        cell.a = max(cell.a, float((neighbourCount == 3.0) && (cell.b >= 1.0)));
+        //  - it has diffusive mass < θ in its neighborhood and it has boundary mass ≥ α:
+        float nearbyVapour = n[0].r+n[1].r+n[2].r+n[3].r+n[4].r+n[5].r;
+        cell.a = max(cell.a, float((neighbourCount == 3.0) && (cell.b >= alpha) && (nearbyVapour < theta)));
+
+        // (3c) Finally, boundary sites with 4 or more attached neighbors join
+        // the crystal automatically
+        cell.a = max(cell.a, float(neighbourCount >= 4.0));
+
+        // Once a site is attached, its boundary mass becomes crystal mass:
+        cell.g += inBoundary * cell.a * cell.b;
+        cell.b -= inBoundary * cell.a * cell.b;
+
+		return cell;
+    }
+
+    vec4 melting(vec4 cell, vec4 n[6]) {
+        // 4. Melting
+        // Proportion μ of the boundary mass and proportion γ of the crystal
+        // mass at each boundary site become diffusive mass.
+        float inBoundary = inBoundary(cell, n);
+        cell.r += inBoundary * (cell.b*mu + cell.g*gamma);
+        cell.b -= inBoundary * cell.b * mu;
+        cell.g -= inBoundary * cell.g * gamma;
+
+		return cell;
+    }
+
+    void main() {
+		vec2 cellSize = 1.0 / resolution.xy;
+		vec2 uv = gl_FragCoord.xy * cellSize;
+		vec4 cell = texture2D(snowflake, uv);
+		vec4 n[6];
+        n[0] = texture2D(snowflake, uv + vec2(-cellSize.x, cellSize.y));
+        n[1] = texture2D(snowflake, uv + vec2(0.0, cellSize.y));
+        n[2] = texture2D(snowflake, uv + vec2(cellSize.x, 0.0));
+        n[3] = texture2D(snowflake, uv + vec2(cellSize.x, -cellSize.y));
+        n[4] = texture2D(snowflake, uv + vec2(0.0, -cellSize.y));
+        n[5] = texture2D(snowflake, uv + vec2(-cellSize.x, 0.0));
+        //float d = cell.r; // diffuse (vapor) mass
+		//float c = cell.g; // crystal (ice) mass
+		//float b = cell.b; // boundary (water) mass
+		//float a = cell.a; // attachment (actually a bool but more convient to leave as an float for multiplications)
+
         if (step==1){
-            // 1. Diffusion
-		    d = ((topLeft.r + topRight.r + right.r + bottomRight.r + bottomLeft.r + left.r + d)/7.0)*(1.0-a) + neighbourCount*d/7.0;
+            gl_FragColor = diffusion(cell, n);
+        } else if (step==2){
+            gl_FragColor = freezing(cell, n);
+        } else if (step==3){
+            gl_FragColor = attachment(cell, n);
+        } else if (step==4){
+            gl_FragColor = melting(cell, n);
         }
-
-        if (step==2){
-            // 2. Freezing
-            b += inBoundary * d * (1.0-kappa);
-            c += inBoundary * d * kappa;
-            d -= inBoundary * d;
-        }
-
-        if (step==3){
-            // 3. Attachment
-
-            // (3a)  - A boundary site with 1 or 2 attached neighbors needs boundary
-            // mass at least β to join the crystal:
-            a = max(a, float(((neighbourCount == 1.0) || (neighbourCount == 2.0)) && (b > beta)));
-
-            // (3b) A boundary site with 3 attached neighbors joins the crystal if
-            // either:
-            //  - it has boundary mass ≥ 1, or
-            a = max(a, float((neighbourCount == 3.0) && (b >= 1.0)));
-            //  - it has diffusive mass < θ in its neighborhood and it has boundary mass ≥ α:
-            float nearbyVapour = topLeft.r + topRight.r + right.r + bottomRight.r + bottomLeft.r + left.r + d;
-            a = max(a, float((neighbourCount == 3.0) && (b >= alpha) && (nearbyVapour < theta)));
-
-            // (3c) Finally, boundary sites with 4 or more attached neighbors join
-            // the crystal automatically
-            a = max(a, float(neighbourCount >= 4.0));
-
-            // Once a site is attached, its boundary mass becomes crystal mass:
-            c += inBoundary * a * b;
-            b -= inBoundary * a * b;
-        }
-
-        if (step==4){
-            // 4. Melting
-            // Proportion μ of the boundary mass and proportion γ of the crystal
-            // mass at each boundary site become diffusive mass.
-
-            // TODO these redefinitions will be needed if this is split out into a seperate step.
-            //float neighbourCount = topLeft.a + topRight.a + right.a + bottomRight.a + bottomLeft.a + left.a - 6.0*a;
-            //neighbourCount = max(neighbourCount, 0.0);
-            //float inBoundary =  min(neighbourCount, 1.0);
-
-            d += inBoundary * (b*mu + c*gamma);
-            b -= inBoundary * b*mu;
-            c -= inBoundary * c*gamma;
-        }
-
-		gl_FragColor = vec4(d, c, b, a);
-	}
+    }
 `
 
 
@@ -309,13 +330,15 @@ function getInitialData(snowflakeSimulation, params) {
 function animate() {
     requestAnimationFrame(animate);
 
-    // Every animation frame we do a single step of the snowflake simulation,
-    // copy the data from that into the texture for snowflake object and then
-    // render the scene containing the snowflake object
+    // Every animation frame we run a single generation of the snowflake
+    // simulation. Each generation consists of multiple steps.
     for (var step=1; step <= 4; step++) {
         snowflakeData.material.uniforms.step.value = step;
         snowflakeSimulation.compute();
     }
+
+    // Copy the data from the simulation into the texture for snowflake object
+    // and then render the scene containing the snowflake object
     snowflakeObject.material.uniforms.snowflake.value = snowflakeSimulation.getCurrentRenderTarget(snowflakeData).texture;
     renderer.render(scene, camera);
 
