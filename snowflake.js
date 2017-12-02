@@ -78,6 +78,33 @@ snowflakeRenderFragmentShader = `
 	}
 `
 
+
+snowflakeComputationVertexShader = `
+    varying vec2 centrePos;
+    varying vec2 northWestPos;
+    varying vec2 northEastPos;
+    varying vec2 eastPos;
+    varying vec2 southEastPos;
+    varying vec2 southWestPos;
+    varying vec2 westPos;
+
+    void main()	{
+        vec2 widthStep = vec2(1.0/resolution.x, 0.0);
+        vec2 heightStep = vec2(0.0, 1.0/resolution.y);
+
+        centrePos = uv;
+        northWestPos = uv + heightStep - widthStep;
+        northEastPos = uv + heightStep;
+        eastPos = uv + widthStep;
+        southEastPos = uv - heightStep + widthStep;
+        southWestPos = uv +- heightStep;
+        westPos = uv - widthStep;
+
+        gl_Position = vec4(position, 1.0);
+    }
+`
+
+
 snowflakeComputationFragmentShader = `
     uniform float beta;
     uniform float alpha;
@@ -87,6 +114,14 @@ snowflakeComputationFragmentShader = `
     uniform float gamma;
 
     uniform int step;
+
+    varying vec2 centrePos;
+    varying vec2 northWestPos;
+    varying vec2 northEastPos;
+    varying vec2 eastPos;
+    varying vec2 southEastPos;
+    varying vec2 southWestPos;
+    varying vec2 westPos;
 
     float inBoundary(vec4 cell, vec4 n[6]) {
 		float neighbourCount = n[0].a + n[1].a + n[2].a + n[3].a + n[4].a + n[5].a - 6.0*cell.a;
@@ -158,16 +193,14 @@ snowflakeComputationFragmentShader = `
     }
 
     void main() {
-		vec2 cellSize = 1.0 / resolution.xy;
-		vec2 uv = gl_FragCoord.xy * cellSize;
-		vec4 cell = texture2D(snowflake, uv);
+        vec4 cell = texture2D(snowflake, centrePos);
 		vec4 n[6];
-        n[0] = texture2D(snowflake, uv + vec2(-cellSize.x, cellSize.y));
-        n[1] = texture2D(snowflake, uv + vec2(0.0, cellSize.y));
-        n[2] = texture2D(snowflake, uv + vec2(cellSize.x, 0.0));
-        n[3] = texture2D(snowflake, uv + vec2(cellSize.x, -cellSize.y));
-        n[4] = texture2D(snowflake, uv + vec2(0.0, -cellSize.y));
-        n[5] = texture2D(snowflake, uv + vec2(-cellSize.x, 0.0));
+        n[0] = texture2D(snowflake, northWestPos);
+        n[1] = texture2D(snowflake, northEastPos);
+        n[2] = texture2D(snowflake, eastPos);
+        n[3] = texture2D(snowflake, southEastPos);
+        n[4] = texture2D(snowflake, southWestPos);
+        n[5] = texture2D(snowflake, westPos);
         //float d = cell.r; // diffuse (vapor) mass
 		//float c = cell.g; // crystal (ice) mass
 		//float b = cell.b; // boundary (water) mass
@@ -239,6 +272,20 @@ function initScene() {
 
 function initSimulation(params) {
     snowflakeSimulation = new GPUComputationRenderer(COMPUTATION_WIDTH, COMPUTATION_HEIGHT, renderer);
+    // Override GPUComputationRenderer.createShaderMaterial so that we can use
+    // our custom snowflakeComputationVertexShader to avoid dependent texture
+    // reads in snowflakeComputationFragmentShader
+    snowflakeSimulation.createShaderMaterial = function(computeFragmentShader, uniforms) {
+        uniforms = uniforms || {};
+        var material = new THREE.ShaderMaterial( {
+            uniforms: uniforms,
+            vertexShader: snowflakeComputationVertexShader,
+            fragmentShader: computeFragmentShader
+        } );
+        this.addResolutionDefine(material);
+        return material;
+    }
+
     snowflakeInitialData = getInitialData(snowflakeSimulation, params);
 
     snowflakeData = snowflakeSimulation.addVariable(
