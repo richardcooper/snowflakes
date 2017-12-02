@@ -24,26 +24,26 @@ preset_params = {
 
 
 snowflakeRenderVertexShader = `
-
     varying vec2 textureCoord;
+
+    const mat3 shear = mat3(
+        1.0, 0.0, 0.0,
+       -0.5, 1.0, 0.0,
+        0.0, 0.0, 1.0
+    );
+    const mat3 squash = mat3(
+        1.0,           0.0, 0.0,
+        0.0, 2.0/sqrt(3.0), 0.0,
+        0.0,           0.0, 1.0
+    );
+    const mat3 translate = mat3(
+        1.0,                      0.0, 0.0,
+        0.0,                      1.0, 0.0,
+        0.25, (1.0-2.0/sqrt(3.0))/2.0, 1.0
+    );
+    const mat3 textureTransformMatrix = shear * squash * translate;
+
 	void main() {
-        mat3 shear;
-        shear[0] = vec3(1.0, 0.0, 0.0);
-        shear[1] = vec3(-0.50, 1.0, 0);
-        shear[2] = vec3(0.0, 0.0, 1.0);
-
-        mat3 squash;
-        squash[0] = vec3(1.0, 0.0, 0.0);
-        squash[1] = vec3(0.0, 2.0/sqrt(3.0), 0.0);
-        squash[2] = vec3(0.0, 0.0, 1.0);
-
-        mat3 translate;
-        translate[0] = vec3(1.0, 0.0, 0.0);
-        translate[1] = vec3(0.0, 1.0, 0.0);
-        translate[2] = vec3(0.25, (1.0-2.0/sqrt(3.0))/2.0, 1.0);
-
-        mat3 textureTransformMatrix = shear * squash * translate;
-
         textureCoord = (textureTransformMatrix * vec3(uv, 1.0)).xy;
 		gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 	}
