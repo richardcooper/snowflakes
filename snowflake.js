@@ -56,9 +56,9 @@ snowflakeRenderFragmentShader = `
     uniform float maxC;
     uniform float maxD;
 
-    #define darkCrystal  (vec4(0.06, 0.01, 0.45, 1.0))
-    #define lightCrystal (vec4(0.90, 0.90, 1.00, 1.0))
     #define darkVapour  (vec4(0.66, 0.66, 0.66, 1.0))
+    #define darkCrystal (vec4(0.05, 0.15, 0.55, 1.0))
+    #define lightCrystal (vec4(0.80, 1.00, 1.00, 1.0))
     #define lightVapour (vec4(1.00, 1.00, 1.00, 1.0))
 
     uniform sampler2D snowflake;
