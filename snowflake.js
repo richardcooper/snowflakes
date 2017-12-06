@@ -20,7 +20,6 @@ preset_params = {
         "Fig 9a":           {"0": {"rho": 0.4,   "beta": 1.3,  "alpha": 0.08,  "theta": 0.025, "kappa": 0.003, "mu": 0.070, "gamma": 0.00005 }},
         "Ribbed Plate":     {"0": {"rho": 0.37,  "beta": 1.09, "alpha": 0.02,  "theta": 0.09,  "kappa": 0.003, "mu": 0.12,  "gamma": 0.000001}},
     },
-    "closed": false,
     "folders": {},
 }
 
@@ -57,9 +56,9 @@ snowflakeRenderFragmentShader = `
     uniform float maxD;
     uniform float curveC;
 
-    #define darkVapour  (vec4(0.66, 0.66, 0.66, 1.0))
     #define darkCrystal (vec4(0.05, 0.15, 0.55, 1.0))
     #define lightCrystal (vec4(0.80, 1.00, 1.00, 1.0))
+    #define darkVapour  (vec4(0.00, 0.00, 0.00, 0.0))
     #define lightVapour (vec4(1.00, 1.00, 1.00, 1.0))
 
     uniform sampler2D snowflake;
@@ -238,7 +237,7 @@ function init() {
 
 function initRenderer() {
     var canvas = document.getElementById("snowflake-canvas");
-    renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
+    renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(canvas.width, canvas.height);
 }
@@ -336,6 +335,7 @@ function initGUI(params) {
     };
 
     var gui = new dat.GUI({load: preset_params});
+    gui.closed = true;
     gui.add(params, 'rho');
     gui.add(params, 'beta').onFinishChange(uniformsChanger);
     gui.add(params, 'alpha').onFinishChange(uniformsChanger);
@@ -400,6 +400,8 @@ function animate() {
             snowflakeSimulation.compute();
         }
         params.generation++;
+    } else {
+        snowflakeObject.rotateZ(0.0035);
     }
 
     // Copy the data from the simulation into the texture for snowflake object

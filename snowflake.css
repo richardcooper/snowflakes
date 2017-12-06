@@ -1,7 +1,24 @@
+html {
+    margin: 0;
+    padding: 0;
+    background: #000000;
+}
+
 body {
     margin: 0;
-}
+    background: #232373;
+    background: linear-gradient(to bottom, #232373 0%,#000000 100%);
+    }
 
 footer {
     font-size: 0.8em;
+    display: none;
+    visibility: hidden;
+}
+
+canvas {
+    display: block;
+    width: 701px ;
+    margin: 0 auto;
+    vertical-align: middle;
 }
