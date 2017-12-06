@@ -55,6 +55,7 @@ snowflakeRenderVertexShader = `
 snowflakeRenderFragmentShader = `
     uniform float maxC;
     uniform float maxD;
+    uniform float curveC;
 
     #define darkVapour  (vec4(0.66, 0.66, 0.66, 1.0))
     #define darkCrystal (vec4(0.05, 0.15, 0.55, 1.0))
@@ -70,7 +71,7 @@ snowflakeRenderFragmentShader = `
 
         if (bool(cell.a)) {
             // Inside snowflake
-            percent = cell.g / maxC;
+            percent = pow(cell.g / maxC, curveC);
             gl_FragColor = mix(lightCrystal, darkCrystal, percent);
         } else {
             // Outside snowflake
@@ -223,6 +224,8 @@ snowflakeComputationFragmentShader = `
 function init() {
     params = Object.assign({}, preset_params["remembered"][preset_params["preset"]]["0"]);
     params['generation'] = 0
+    params['curve_c'] = 1.7
+    params['max_c'] = params['beta']+0.1
 
     initRenderer();
     initScene();
@@ -316,7 +319,8 @@ function setUniforms(params) {
     snowflakeData.material.uniforms.step = {value: 1};
 
     snowflakeObject.material.uniforms.maxD = {value: params.rho*1};
-    snowflakeObject.material.uniforms.maxC = {value: params.beta*2};
+    snowflakeObject.material.uniforms.curveC = {value: params.curve_c};
+    snowflakeObject.material.uniforms.maxC = {value: params.max_c};
 }
 
 
@@ -324,6 +328,10 @@ function initGUI(params) {
     var uniformsChanger = function() {
         params.generation = 0;
         initSimulation(params);
+        setUniforms(params);
+    };
+
+    var uniformsChangerNoReset = function() {
         setUniforms(params);
     };
 
@@ -335,6 +343,8 @@ function initGUI(params) {
     gui.add(params, 'kappa').onFinishChange(uniformsChanger);
     gui.add(params, 'mu').onFinishChange(uniformsChanger);
     gui.add(params, 'gamma').onFinishChange(uniformsChanger);
+    gui.add(params, 'curve_c').onFinishChange(uniformsChangerNoReset);
+    gui.add(params, 'max_c').onFinishChange(uniformsChangerNoReset);
     gui.add(params, 'maxGeneration');
     gui.add(params, 'generation').listen();
     gui.remember(params);
