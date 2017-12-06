@@ -8,6 +8,8 @@ var snowflakeSimulation;
 var snowflakeData;
 var snowflakeObject;
 
+var params;
+
 var stats;
 
 preset_params = {
@@ -219,7 +221,8 @@ snowflakeComputationFragmentShader = `
 
 
 function init() {
-    var params = Object.assign({}, preset_params["remembered"][preset_params["preset"]]["0"]);
+    params = Object.assign({}, preset_params["remembered"][preset_params["preset"]]["0"]);
+    params['generation'] = 0
 
     initRenderer();
     initScene();
@@ -319,6 +322,7 @@ function setUniforms(params) {
 
 function initGUI(params) {
     var uniformsChanger = function() {
+        params.generation = 0;
         initSimulation(params);
         setUniforms(params);
     };
@@ -331,6 +335,8 @@ function initGUI(params) {
     gui.add(params, 'kappa').onFinishChange(uniformsChanger);
     gui.add(params, 'mu').onFinishChange(uniformsChanger);
     gui.add(params, 'gamma').onFinishChange(uniformsChanger);
+    gui.add(params, 'maxGeneration');
+    gui.add(params, 'generation').listen();
     gui.remember(params);
 
 }
@@ -378,9 +384,12 @@ function animate() {
 
     // Every animation frame we run a single generation of the snowflake
     // simulation. Each generation consists of multiple steps.
-    for (var step=1; step <= 3; step++) {
-        snowflakeData.material.uniforms.step.value = step;
-        snowflakeSimulation.compute();
+    if (params.generation < params.maxGeneration) {
+        for (var step=1; step <= 3; step++) {
+            snowflakeData.material.uniforms.step.value = step;
+            snowflakeSimulation.compute();
+        }
+        params.generation++;
     }
 
     // Copy the data from the simulation into the texture for snowflake object
